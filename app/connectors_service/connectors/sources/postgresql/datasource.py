@@ -78,7 +78,7 @@ class PostgreSQLDataSource(BaseDataSource):
 
     def set_service_config(self, service_config):
         """Configure service parameters for the connector.
-        
+
         Args:
             service_config (dict): Service configuration
         """
@@ -90,7 +90,7 @@ class PostgreSQLDataSource(BaseDataSource):
         self._logger.debug(
             f"Incremental sync interval set to {self._incremental_sync_interval_seconds} seconds"
         )
-        
+
     @classmethod
     def get_default_configuration(cls):
         return {
@@ -170,6 +170,11 @@ class PostgreSQLDataSource(BaseDataSource):
 
     def advanced_rules_validators(self):
         return [PostgreSQLAdvancedRulesValidator(self)]
+
+    async def close(self):
+        """Close the PostgreSQL client and clean up resources."""
+        if hasattr(self, 'postgresql_client'):
+            await self.postgresql_client.close()
 
     async def ping(self):
         """Verify the connection with the database-server configured by user"""
@@ -308,12 +313,12 @@ class PostgreSQLDataSource(BaseDataSource):
         Yields:
             Dict: Document to be indexed
         """
-        
+
         final_query = query
-        
+
         if is_incremental:
-            final_query = self._add_incremental_condition(query)    
-        
+            final_query = self._add_incremental_condition(query)
+
         self._logger.info(
             f"Fetching records for {tables} tables using custom query: {final_query}"
         )
@@ -330,7 +335,7 @@ class PostgreSQLDataSource(BaseDataSource):
             )
 
     async def _yield_docs_custom_query(self, tables, query, id_columns, is_incremental=False):
-        
+
         primary_key_columns, _ = await self.get_primary_key(tables=tables)
 
         if id_columns:
@@ -450,19 +455,19 @@ class PostgreSQLDataSource(BaseDataSource):
 
     def _add_incremental_condition(self, query):
         """Add the incremental condition to a SQL query.
-        
+
         Args:
             query (str): The original SQL query
-            
+
         Returns:
             str: The modified query with the incremental condition
         """
         if not query:
             return query
-            
+
         # Clean the query by removing the semicolons at the end
         cleaned_query = query.rstrip(';').strip()
-        
+
         # Extract the main table name using regex
         import re
         from_match = re.search(r'FROM\s+(\w+)', cleaned_query, re.IGNORECASE)
@@ -470,7 +475,7 @@ class PostgreSQLDataSource(BaseDataSource):
 
         # Get the configured interval
         interval_seconds = self._incremental_sync_interval_seconds
-        
+
         # Check if the query contains a WHERE clause
         query_upper = cleaned_query.upper()
         if "WHERE" in query_upper:
@@ -491,7 +496,7 @@ class PostgreSQLDataSource(BaseDataSource):
             tuple: (document, lazy_download, operation) where operation is 'index' for incremental sync.
         """
         self._logger.info("Successfully connected to Postgresql for incremental sync.")
-        
+
         if filtering and filtering.has_advanced_rules():
             advanced_rules = filtering.get_advanced_rules()
             self._logger.info(
@@ -501,14 +506,14 @@ class PostgreSQLDataSource(BaseDataSource):
                 query = rule.get("query")
                 tables = rule.get("tables")
                 id_columns = rule.get("id_columns")
-                
-                
+
+
                 if id_columns:
                     id_columns = [
                         f"{self.schema}_{'_'.join(sorted(tables))}_{column}"
                         for column in id_columns
                     ]
-                
+
                 # Pass is_incremental=True to automatically add the incremental condition
                 async for row in self.fetch_documents_from_query(
                     tables=tables, query=query, id_columns=id_columns, is_incremental=True
@@ -582,11 +587,11 @@ class PostgreSQLDataSource(BaseDataSource):
         """Yields rows from a query with incremental filtering for table-based queries."""
         # Get the configured interval
         interval_seconds = self._incremental_sync_interval_seconds
-        
+
         # Build the query with the incremental condition
         order_by_clause = ",".join([f'"{column}"' for column in order_by_columns])
         incremental_query = f'SELECT * FROM "{self.schema}"."{tables[0]}" WHERE "{self.schema}"."{tables[0]}".updated_at >= NOW() - INTERVAL \'{interval_seconds} seconds\' ORDER BY {order_by_clause} LIMIT {FETCH_LIMIT}'
-        
+
         streamer = self.postgresql_client.data_streamer(query=incremental_query)
         column_names = await anext(streamer)
         column_names = map_column_names(
