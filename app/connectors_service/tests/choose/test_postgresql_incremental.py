@@ -126,14 +126,17 @@ async def test_full_sync_custom_query_is_not_windowed(source):
     assert len(docs) == 2
 
 
-async def test_known_bug_table_mode_incremental_sync_crashes(source):
-    # No advanced rules: the incremental table query references FETCH_LIMIT,
-    # which datasource.py never imports. Same on v9.4.4-choose.
-    # Once fixed, note the query is a single "LIMIT FETCH_LIMIT" page.
-    with pytest.raises(NameError, match="FETCH_LIMIT"):
-        await incremental_docs(source)
+async def test_known_limitation_table_mode_reads_at_most_1000_rows(source):
+    # No advanced rules: a single page, no pagination. Rows updated in the
+    # window beyond the first 1000 (ordered by primary key) are not synced.
+    items = await incremental_docs(source)
 
-    assert source.db.queries == []
+    assert source.db.queries == [
+        'SELECT * FROM "public"."emp_table"'
+        ' WHERE "public"."emp_table".updated_at >= NOW() - INTERVAL \'120 seconds\''
+        ' ORDER BY "ids" LIMIT 1000'
+    ]
+    assert [op for _, _, op in items] == ["index", "index"]
 
 
 async def test_known_limitation_window_is_appended_after_order_by(source):

@@ -28,7 +28,7 @@ from connectors_sdk.source import BaseDataSource
 from connectors_sdk.utils import iso_utc
 from sqlalchemy.exc import ProgrammingError
 
-from connectors.sources.postgresql.client import PostgreSQLClient
+from connectors.sources.postgresql.client import FETCH_LIMIT, PostgreSQLClient
 from connectors.sources.postgresql.validator import PostgreSQLAdvancedRulesValidator
 from connectors.sources.shared.database.generic_database import (
     DEFAULT_FETCH_SIZE,
