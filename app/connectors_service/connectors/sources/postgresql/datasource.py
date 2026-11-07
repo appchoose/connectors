@@ -509,10 +509,9 @@ class PostgreSQLDataSource(BaseDataSource):
 
 
                 if id_columns:
-                    id_columns = [
-                        f"{self.schema}_{'_'.join(sorted(tables))}_{column}"
-                        for column in id_columns
-                    ]
+                    id_columns = map_column_names(
+                        column_names=id_columns, schema=self.schema, tables=tables
+                    )
 
                 # Pass is_incremental=True to automatically add the incremental condition
                 async for row in self.fetch_documents_from_query(
