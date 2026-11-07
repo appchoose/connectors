@@ -1,0 +1,30 @@
+name: Choose fork verify
+
+# Runs on every push of a branch carrying the Choose stack (this file only
+# exists there, so the upstream mirror on main is not affected).
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: choose/verify.sh (full suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: python:3.11-slim-bookworm
+    steps:
+      - name: Install git and make
+        run: apt-get update && apt-get install -y --no-install-recommends git make
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Verify the Choose stack
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          FULL=1 choose/verify.sh
