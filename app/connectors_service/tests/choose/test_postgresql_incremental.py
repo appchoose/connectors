@@ -61,10 +61,11 @@ async def source():
         yield source
 
 
-def advanced_rules(query, tables=(TABLE,)):
-    return Filter(
-        {"advanced_snippet": {"value": [{"tables": list(tables), "query": query}]}}
-    )
+def advanced_rules(query, tables=(TABLE,), id_columns=None):
+    rule = {"tables": list(tables), "query": query}
+    if id_columns is not None:
+        rule["id_columns"] = id_columns
+    return Filter({"advanced_snippet": {"value": [rule]}})
 
 
 async def incremental_docs(source, filtering=None):
@@ -124,6 +125,20 @@ async def test_full_sync_custom_query_is_not_windowed(source):
 
     assert source.db.queries == ["select * from emp_table"]
     assert len(docs) == 2
+
+
+@pytest.mark.parametrize("id_columns", [["id"], ["ids"], ["IDS"]])
+async def test_incremental_and_full_sync_produce_the_same_ids(source, id_columns):
+    # Same _id in both syncs, otherwise the incremental sync creates
+    # duplicates or silently indexes nothing.
+    rules = advanced_rules("select * from emp_table", id_columns=id_columns)
+
+    full_ids = [doc["_id"] async for doc, _ in source.get_docs(filtering=rules)]
+    incremental_ids = [
+        doc["_id"] for doc, _, _ in await incremental_docs(source, rules)
+    ]
+
+    assert incremental_ids == full_ids
 
 
 async def test_known_limitation_table_mode_reads_at_most_1000_rows(source):
