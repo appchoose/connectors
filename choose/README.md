@@ -16,26 +16,29 @@ plus récent : `choose/port.sh` le fait et refuse de conclure sans les tests.
 | 6 | test(choose): pin fork behavior… | Aligne 7 tests upstream sur le comportement du fork. | `tests/…` |
 | 7 | test(choose): cover the PostgreSQL incremental sync… | Tests du fork, dans `tests/choose/`. | — (nouveaux fichiers) |
 | 8 | chore(choose): add port.sh and verify.sh | Outillage. | — (nouveaux fichiers) |
+| 9 | fix(choose): restore table-mode incremental sync… | Réimporte `FETCH_LIMIT`, perdu au portage 9.4. | `sources/postgresql/datasource.py` |
+| 10 | fix(choose): map incremental id_columns… | Même calcul des `_id` en full et en incrémental. | `sources/postgresql/datasource.py` |
 
-## Bugs connus
+Les tests de `tests/choose/` passent sur ce portage et sur `v9.0.2-choose-2`
+(imports adaptés à l'ancienne arborescence).
 
-Tous sont déjà présents en production (`v9.4.4-choose`) et figés par un test,
-pour qu'une correction se voie :
+## Bugs et limites connus
+
+Figés par un test, pour qu'une correction se voie :
 
 - **Full sync PG en mode table** (sans règles avancées) : `KeyError: 'columns'`.
-  Le fork ne passe plus `row_count`, donc la requête de pagination est mal
-  construite. Test : `test_get_docs` (`xfail` strict).
-- **Sync incrémental PG en mode table** : `NameError: FETCH_LIMIT`, jamais
-  importé dans `datasource.py`. Test : `test_known_bug_table_mode_incremental_sync_crashes`.
+  Le fork ne passe plus `row_count`. Déjà le cas en `v9.0.2-choose-2`.
+  Test : `test_get_docs` (`xfail` strict).
+- **Incrémental PG en mode table** : une seule page `LIMIT 1000`, pas de
+  pagination. Test : `test_known_limitation_table_mode_reads_at_most_1000_rows`.
 - **Règles avancées en incrémental** : la condition est collée en fin de
   requête. Avec `ORDER BY` ou `LIMIT`, le SQL produit est invalide. Avec
   `FROM schema.table`, la condition vise `"schema".updated_at`. Tests :
   `test_known_limitation_*`.
+- Avec un `JOIN`, seule la table du `FROM` est regardée : un changement dans
+  une table jointe n'est repris qu'au prochain full sync.
 - L'incrémental n'émet que des opérations `index` : les suppressions ne
   passent pas par lui.
-
-[Inference] Les deux premiers bugs rendent le mode table inutilisable. Il est
-donc probable que seuls des connecteurs avec règles avancées tournent en prod.
 
 ## Monter de version upstream
 
@@ -62,16 +65,26 @@ git add <fichiers> && git cherry-pick --continue && choose/verify.sh
 automatiquement si vous recommencez.
 
 Vérifier sans porter : `choose/verify.sh`, ou `FULL=1 choose/verify.sh` pour
-toute la suite.
+toute la suite. La CI (`.github/workflows/choose-verify.yml`) lance
+`FULL=1 choose/verify.sh` à chaque push d'une branche qui contient la pile.
 
-## Points de vigilance 9.4 → 9.5
+Ce repo est public : la procédure de déploiement et tout détail
+d'infrastructure restent dans les repos internes.
 
-Liste non exhaustive. Elle couvre `config.yml.example` et les fichiers touchés
-par le fork :
+## Points de vigilance 9.0.2 → 9.5.6
 
-- `elasticsearch.bulk.max_text_document_size` (nouveau, **3 MiB par défaut,
-  actif**) : un document sans pièce jointe plus gros est ignoré et compté dans
-  `docs_dropped_too_large`. Mettre `0` pour garder le comportement 9.4.
-- `JOB_CHECK_INTERVAL` passe de 1 s à 5 s : l'annulation d'un sync est vue
-  jusqu'à 5 s plus tard.
-- `service.worker_mode` (nouveau, `false` par défaut) : aucun effet si non activé.
+Différences de configuration effective entre les deux versions, obtenues en
+chargeant notre config de prod avec le `load_config` de chaque version. Toutes
+nos clés existent encore.
+
+- `elasticsearch.bulk.max_text_document_size` (nouveau, **3 MiB, actif**) :
+  un document sans pièce jointe plus gros est ignoré et compté dans
+  `docs_dropped_too_large`. Mettre `0` pour garder le comportement 9.0.
+- `elasticsearch.bulk.error_monitor.*` (nouveau, **actif**) : un sync échoue
+  au-delà de 15 % d'erreurs bulk, 10 erreurs consécutives ou 1000 au total.
+- `elasticsearch.bulk.queue_refresh_timeout` : 600 → 1300 s.
+- `elasticsearch.max_wait_duration` : 120 → 240 s.
+- `service.worker_mode`, `service.service_types`, `service.fips_mode` :
+  nouveaux, inactifs par défaut.
+- `JOB_CHECK_INTERVAL` (code, non configurable) : 1 → 5 s. Une annulation de
+  sync est vue jusqu'à 5 s plus tard.
