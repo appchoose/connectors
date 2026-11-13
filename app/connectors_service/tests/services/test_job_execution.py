@@ -268,11 +268,14 @@ async def test_access_control_sync_job_execution_with_dls_feature_flag_disabled(
     sync_job_pool_mock.try_put.assert_not_called()
 
 
+# Choose fork: content syncs of a connector that is still syncing are dispatched
+# (concurrency is bounded by service.max_concurrent_content_syncs only);
+# access control syncs keep the upstream behavior.
 @pytest.mark.parametrize(
-    "service_klass, job_type",
+    "service_klass, job_type, dispatched",
     [
-        (ContentSyncJobExecutionService, JobType.FULL),
-        (AccessControlSyncJobExecutionService, JobType.ACCESS_CONTROL),
+        (ContentSyncJobExecutionService, JobType.FULL, True),
+        (AccessControlSyncJobExecutionService, JobType.ACCESS_CONTROL, False),
     ],
 )
 @pytest.mark.asyncio
@@ -283,6 +286,7 @@ async def test_job_execution_with_connector_still_syncing(
     sync_job_runner_mock,
     service_klass,
     job_type,
+    dispatched,
     set_env,
 ):
     sync_job_pool_mock = concurrent_tasks_mocks
@@ -297,7 +301,7 @@ async def test_job_execution_with_connector_still_syncing(
     sync_job_index_mock.pending_jobs.return_value = AsyncIterator([sync_job])
     await create_and_run_service(service_klass)
 
-    sync_job_pool_mock.try_put.assert_not_called()
+    assert sync_job_pool_mock.try_put.called is dispatched
 
 
 @pytest.mark.parametrize(

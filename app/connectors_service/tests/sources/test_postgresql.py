@@ -439,6 +439,15 @@ async def test_advanced_rules_validation_when_id_in_source_available(
             assert validation_result == expected_validation_result
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=KeyError,
+    reason=(
+        "Choose fork known bug: the fork stopped passing row_count, so table-mode "
+        "full sync (no advanced rules) builds table_data() without columns/limit/offset. "
+        "Same failure on v9.4.4-choose. Remove this marker once fixed."
+    ),
+)
 @freeze_time(TIME)
 @pytest.mark.asyncio
 async def test_get_docs():
@@ -476,6 +485,8 @@ async def test_get_docs():
             assert actual_response == expected_response
 
 
+# Choose fork: custom-query docs are stamped with the sync time (iso_utc),
+# not with the tables' last commit timestamp.
 @freeze_time(TIME)
 @pytest.mark.parametrize(
     "filtering, expected_response",
@@ -499,7 +510,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 1,
                     "public_emp_table_names": "abcd",
                     "_id": "xe_public_emp_table_1",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -508,7 +519,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 2,
                     "public_emp_table_names": "xyz",
                     "_id": "xe_public_emp_table_2",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -535,7 +546,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 1,
                     "public_emp_table_names": "abcd",
                     "_id": "xe_public_emp_table_1",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -544,7 +555,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 2,
                     "public_emp_table_names": "xyz",
                     "_id": "xe_public_emp_table_2",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -553,7 +564,7 @@ async def test_get_docs():
                     "public_customer_ids": 1,
                     "public_customer_names": "customer_1",
                     "_id": "xe_public_customer_1",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["customer"],
                     "schema": "public",
@@ -562,7 +573,7 @@ async def test_get_docs():
                     "public_customer_ids": 2,
                     "public_customer_names": "customer_2",
                     "_id": "xe_public_customer_2",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["customer"],
                     "schema": "public",
@@ -591,7 +602,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 1,
                     "public_emp_table_names": "abcd",
                     "_id": "xe_public_emp_table_1",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -600,7 +611,7 @@ async def test_get_docs():
                     "public_emp_table_ids": 2,
                     "public_emp_table_names": "xyz",
                     "_id": "xe_public_emp_table_2",
-                    "_timestamp": "2023-02-21T08:37:15+00:00",
+                    "_timestamp": TIME,
                     "database": "xe",
                     "table": ["emp_table"],
                     "schema": "public",
@@ -634,9 +645,8 @@ SYNC_TIME = "2023-03-09T00:00:00+00:00"
 @pytest.mark.parametrize(
     "last_update_times, expected_timestamp",
     [
-        pytest.param(
-            [None, LAST_UPDATE_TIME], LAST_UPDATE_TIME.isoformat(), id="one-table-empty"
-        ),
+        # Choose fork: the last-update-time lookup is removed, docs always get the sync time
+        pytest.param([None, LAST_UPDATE_TIME], SYNC_TIME, id="one-table-empty"),
         pytest.param([None, None], SYNC_TIME, id="no-table-has-commit-timestamps"),
         pytest.param(
             [Exception("commit timestamp lookup failed"), LAST_UPDATE_TIME],

@@ -170,11 +170,13 @@ async def test_connector_content_sync_starts_fail():
         body={},
     )
 
-    with pytest.raises(SyncJobStartError):
+    # Choose fork: a content sync already in progress no longer aborts the claim,
+    # so the ES conflict is retried by with_concurrency_control and then re-raised.
+    with pytest.raises(ConflictError):
         await sync_job_runner.execute()
 
     assert sync_job_runner.sync_orchestrator is None
-    sync_job_runner.connector.sync_starts.assert_awaited()
+    assert sync_job_runner.connector.sync_starts.await_count == 3
     sync_job_runner.sync_job.claim.assert_not_awaited()
     sync_job_runner.sync_job.done.assert_not_awaited()
     sync_job_runner.sync_job.fail.assert_not_awaited()

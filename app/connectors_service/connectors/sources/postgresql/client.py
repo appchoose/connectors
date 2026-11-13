@@ -95,6 +95,12 @@ class PostgreSQLClient:
             )
         )
 
+    async def close(self):
+        """Close the database engine and clean up resources."""
+        if hasattr(self, 'engine') and self.engine:
+            await self.engine.dispose()
+            self._logger.debug("PostgreSQL engine disposed successfully")
+
     async def get_tables_to_fetch(self, is_filtering=False):
         tables = configured_tables(self.tables)
         if is_wildcard(tables) or is_filtering:

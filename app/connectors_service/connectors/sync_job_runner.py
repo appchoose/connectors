@@ -156,6 +156,9 @@ class SyncJobRunner:
                 self._data_source_framework_config()
             )
 
+            if hasattr(self.data_provider, 'set_service_config'):
+                self.data_provider.set_service_config(self.service_config)
+
             self.sync_job.log_debug("Instantiated data provider for the sync job.")
 
             if not await self.data_provider.changed():
@@ -410,10 +413,8 @@ class SyncJobRunner:
         if job_type in [JobType.FULL, JobType.INCREMENTAL]:
             if self.connector.last_sync_status == JobStatus.IN_PROGRESS:
                 logger.debug(
-                    f"A content sync job is started for connector {self.connector.id} by another connector instance, skipping..."
+                    f"A content sync job is started for connector {self.connector.id} by another connector instance, but we now allow multiple content sync jobs to run concurrently..."
                 )
-                msg = f"A content sync job is started for connector {self.connector.id} by another connector instance"
-                raise SyncJobStartError(msg)
         elif job_type == JobType.ACCESS_CONTROL:
             if self.connector.last_access_control_sync_status == JobStatus.IN_PROGRESS:
                 logger.debug(
